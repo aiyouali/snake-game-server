@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>贪吃蛇</title>
+<script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+<style>
+    body{margin:0;background:#111;display:flex;align-items:center;justify-content:center;height:100vh;font-family:Arial,sans-serif}
+    #gameCanvas{background:#000;border:2px solid #fff}
+    #info{color:#fff;margin-left:20px}
+    #info h3{margin:0 0 10px}
+    #leaderboard{list-style:none;padding:0;margin:0}
+    
+    /* 手机版虚拟按键 */
+    #mobileControls {
+        display: none;
+        position: fixed;
+        bottom: 20px;
+        width: 100%;
+        text-align: center;
+    }
+    
+    .control-btn {
+        width: 100px;
+        height: 100px;
+        margin: 10px;
+        background-color: rgba(255, 255, 255, 0.2);
+        border: 2px solid #fff;
+        border-radius: 50%;
+        color: white;
+        font-size: 24px;
+        cursor: pointer;
+        user-select: none;
+        display: inline-block;
+        line-height: 100px;
+    }
+    
+    .control-btn:active {
+        background-color: rgba(255, 255, 255, 0.4);
+    }
+    
+    @media (max-width: 768px) {
+        body {
+            flex-direction: column;
+        }
+        
+        #info {
+            margin-left: 0;
+            margin-top: 20px;
+            text-align: center;
+        }
+        
+        #mobileControls {
+            display: block;
+        }
+    }
+</style>
+</head>
+<body>
+<canvas id="gameCanvas" width="400" height="400"></canvas>
+<div id="info">
+    <h3>贪吃蛇</h3>
+    <div>玩家ID：<span id="playerId"></span></div>
+    <div>得分：<span id="score">0</span></div>
+    <h4>排行榜</h4>
+    <ul id="leaderboard"></ul>
+</div>
+
+<!-- 手机版虚拟按键 -->
+<div id="mobileControls">
+    <div class="control-btn" id="upBtn">↑</div><br>
+    <div class="control-btn" id="leftBtn">←</div>
+    <div class="control-btn" id="downBtn">↓</div>
+    <div class="control-btn" id="rightBtn">→</div>
+</div>
+
+<script>
+/* ========== 基础参数 ========== */
+const canvas = document.getElementById('gameCanvas');
+const ctx    = canvas.getContext('2d');
+const grid   = 20;
+const width  = canvas.width;
+const height = canvas.height;
+
+let snake    = [{x:200, y:200}];
+let direction= 'right';
+let food     = randomFood();
+let score    = 0;
+let playerId = Date.now();
+
+// 显示玩家ID
+document.getElementById('playerId').textContent = playerId;
+
+/* ========== 网络（排行榜） ========== */
+// 如果本地没有 ws://localhost:8081 服务，把下面两行注释掉即可单机玩
+const socket = io('' + window.location.hostname + ':8082');
+socket.on('connect', () => {
+    socket.emit('join', {id: playerId});
+});
+socket.on('leaderboard', (list) => {
+    updateLeaderboard(list);
+});
+
+/* ========== 游戏主循环 ========== */
+document.addEventListener('keydown', e => {
+    const key = e.key;
+    if(key==='ArrowUp'    && direction!=='down')  direction='up';
+    if(key==='ArrowDown'  && direction!=='up')    direction='down';
+    if(key==='ArrowLeft'  && direction!=='right') direction='left';
+    if(key==='ArrowRight' && direction!=='left')  direction='right';
+});
+
+// 手机版虚拟按键事件
+document.getElementById('upBtn').addEventListener('click', () => {
+    if(direction !== 'down') direction = 'up';
+});
+
+document.getElementById('downBtn').addEventListener('click', () => {
+    if(direction !== 'up') direction = 'down';
+});
+
+document.getElementById('leftBtn').addEventListener('click', () => {
+    if(direction !== 'right') direction = 'left';
+});
+
+document.getElementById('rightBtn').addEventListener('click', () => {
+    if(direction !== 'left') direction = 'right';
+});
+
+setInterval(gameTick, 100);
+
+function gameTick(){
+    moveSnake();
+    if(checkCollision()) return gameOver();
+    if(eatFood()) {
+        score++;
+        document.getElementById('score').textContent = score;
+        food = randomFood();
+        sendScore();          // 上传分数
+    }
+    draw();
+}
+
+/* ========== 逻辑 ========== */
+function moveSnake(){
+    const head = {x:snake[0].x, y:snake[0].y};
+    switch(direction){
+        case 'up':    head.y -= grid; break;
+        case 'down':  head.y += grid; break;
+        case 'left':  head.x -= grid; break;
+        case 'right': head.x += grid; break;
+    }
+    snake.unshift(head);
+    if(head.x!==food.x || head.y!==food.y) snake.pop();
+}
+
+function eatFood(){ return snake[0].x===food.x && snake[0].y===food.y; }
+
+function checkCollision(){
+    const h = snake[0];
+    if(h.x<0||h.x>=width||h.y<0||h.y>=height) return true;
+    for(let i=1;i<snake.length;i++) if(h.x===snake[i].x && h.y===snake[i].y) return true;
+    return false;
+}
+
+function gameOver(){
+    alert('游戏结束！得分：'+score);
+    snake = [{x:200,y:200}];
+    direction = 'right';
+    score = 0;
+    document.getElementById('score').textContent = 0;
+}
+
+/* ========== 绘图 ========== */
+function draw(){
+    ctx.clearRect(0,0,width,height);
+    // 蛇
+    ctx.fillStyle = '#0f0';
+    snake.forEach(s => ctx.fillRect(s.x,s.y,grid,grid));
+    // 食物
+    ctx.fillStyle = '#f00';
+    ctx.fillRect(food.x,food.y,grid,grid);
+}
+
+function randomFood(){
+    return {
+        x: Math.floor(Math.random()*(width/grid))*grid,
+        y: Math.floor(Math.random()*(height/grid))*grid
+    };
+}
+
+/* ========== 排行榜 ========== */
+function sendScore(){
+    socket.emit('score', {id: playerId, score});
+}
+function updateLeaderboard(list){
+    const ul = document.getElementById('leaderboard');
+    ul.innerHTML = '';
+    list.sort((a,b)=>b.score-a.score).slice(0,5).forEach(item=>{
+        const li = document.createElement('li');
+        // 只显示IP地址的最后一位
+        const ipParts = item.ip ? item.ip.split('.') : [];
+        const ipDisplay = ipParts.length > 0 ? ipParts[ipParts.length - 1] : '未知';
+        li.textContent = `玩家${ipDisplay}：${item.score}`;
+        ul.appendChild(li);
+    });
+}
+</script>
+</body>
+</html>
