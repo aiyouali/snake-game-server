@@ -12,6 +12,78 @@
     #info h3{margin:0 0 10px}
     #leaderboard{list-style:none;padding:0;margin:0}
     
+    /* 开始界面 */
+    #startScreen {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: #000000; /* 纯黑色 */
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        color: white;
+        z-index: 10;
+    }
+    
+    #startButton {
+        padding: 15px 30px;
+        font-size: 20px;
+        background-color: #4CAF50;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        margin-top: 20px;
+    }
+    
+    #startButton:hover {
+        background-color: #45a049;
+    }
+    
+    /* 死亡页面 */
+    #deathScreen {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.8); /* 半透明黑色 */
+        display: none;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        color: white;
+        z-index: 10;
+    }
+    
+    #deathMessage {
+        font-size: 32px;
+        margin-bottom: 20px;
+        text-align: center;
+    }
+    
+    #deathScore {
+        font-size: 24px;
+        margin-bottom: 30px;
+    }
+    
+    #respawnButton {
+        padding: 15px 30px;
+        font-size: 20px;
+        background-color: #f44336;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+    }
+    
+    #respawnButton:hover {
+        background-color: #d32f2f;
+    }
+    
     /* 手机版虚拟按键 */
     #mobileControls {
         display: none;
@@ -58,6 +130,19 @@
 </style>
 </head>
 <body>
+<!-- 开始界面 -->
+<div id="startScreen">
+    <h1>贪吃蛇游戏</h1>
+    <button id="startButton">开始游戏</button>
+</div>
+
+<!-- 死亡页面 -->
+<div id="deathScreen">
+    <div id="deathMessage">你死了！</div>
+    <div id="deathScore">得分: 0</div>
+    <button id="respawnButton">重生</button>
+</div>
+
 <canvas id="gameCanvas" width="400" height="400"></canvas>
 <div id="info">
     <h3>贪吃蛇</h3>
@@ -88,6 +173,8 @@ let direction= 'right';
 let food     = randomFood();
 let score    = 0;
 let playerId = Date.now();
+let gameRunning = false;
+let gameInterval;
 
 // 显示玩家ID
 document.getElementById('playerId').textContent = playerId;
@@ -102,33 +189,44 @@ socket.on('leaderboard', (list) => {
     updateLeaderboard(list);
 });
 
+/* ========== 开始界面 ========== */
+document.getElementById('startButton').addEventListener('click', () => {
+    document.getElementById('startScreen').style.display = 'none';
+    startGame();
+});
+
 /* ========== 游戏主循环 ========== */
-document.addEventListener('keydown', e => {
-    const key = e.key;
-    if(key==='ArrowUp'    && direction!=='down')  direction='up';
-    if(key==='ArrowDown'  && direction!=='up')    direction='down';
-    if(key==='ArrowLeft'  && direction!=='right') direction='left';
-    if(key==='ArrowRight' && direction!=='left')  direction='right';
-});
+function startGame() {
+    if (gameRunning) return;
+    gameRunning = true;
+    
+    document.addEventListener('keydown', e => {
+        const key = e.key;
+        if(key==='ArrowUp'    && direction!=='down')  direction='up';
+        if(key==='ArrowDown'  && direction!=='up')    direction='down';
+        if(key==='ArrowLeft'  && direction!=='right') direction='left';
+        if(key==='ArrowRight' && direction!=='left')  direction='right';
+    });
 
-// 手机版虚拟按键事件
-document.getElementById('upBtn').addEventListener('click', () => {
-    if(direction !== 'down') direction = 'up';
-});
+    // 手机版虚拟按键事件
+    document.getElementById('upBtn').addEventListener('click', () => {
+        if(direction !== 'down') direction = 'up';
+    });
 
-document.getElementById('downBtn').addEventListener('click', () => {
-    if(direction !== 'up') direction = 'down';
-});
+    document.getElementById('downBtn').addEventListener('click', () => {
+        if(direction !== 'up') direction = 'down';
+    });
 
-document.getElementById('leftBtn').addEventListener('click', () => {
-    if(direction !== 'right') direction = 'left';
-});
+    document.getElementById('leftBtn').addEventListener('click', () => {
+        if(direction !== 'right') direction = 'left';
+    });
 
-document.getElementById('rightBtn').addEventListener('click', () => {
-    if(direction !== 'left') direction = 'right';
-});
+    document.getElementById('rightBtn').addEventListener('click', () => {
+        if(direction !== 'left') direction = 'right';
+    });
 
-setInterval(gameTick, 100);
+    gameInterval = setInterval(gameTick, 100);
+}
 
 function gameTick(){
     moveSnake();
@@ -165,11 +263,12 @@ function checkCollision(){
 }
 
 function gameOver(){
-    alert('游戏结束！得分：'+score);
-    snake = [{x:200,y:200}];
-    direction = 'right';
-    score = 0;
-    document.getElementById('score').textContent = 0;
+    // 显示死亡页面
+    document.getElementById('deathScore').textContent = '得分: ' + score;
+    document.getElementById('deathScreen').style.display = 'flex';
+    
+    clearInterval(gameInterval);
+    gameRunning = false;
 }
 
 /* ========== 绘图 ========== */
@@ -206,6 +305,22 @@ function updateLeaderboard(list){
         ul.appendChild(li);
     });
 }
+
+/* ========== 死亡页面 ========== */
+// 重生按钮事件处理
+document.getElementById('respawnButton').addEventListener('click', () => {
+    // 隐藏死亡页面
+    document.getElementById('deathScreen').style.display = 'none';
+    
+    // 重置游戏状态
+    snake = [{x:200,y:200}];
+    direction = 'right';
+    score = 0;
+    document.getElementById('score').textContent = 0;
+    
+    // 重新开始游戏
+    startGame();
+});
 </script>
 </body>
 </html>
